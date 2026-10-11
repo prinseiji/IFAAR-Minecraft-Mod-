@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents.ModifyOutput;
 import net.fabricmc.fabric.api.entity.event.v1.EntitySleepEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.EntitySleepEvents.AllowResettingTime;
 import net.fabricmc.fabric.api.entity.event.v1.EntitySleepEvents.StartSleeping;
@@ -94,6 +95,7 @@ public final class CombatInjuries implements ModInitializer {
       "copper_sword", "copper_axe", "copper_pickaxe", "copper_shovel", "copper_hoe"
    );
    private static final int SLEEP_TICKS_REQUIRED = 100;
+   private static final int FRACTURE_STILL_TICKS = 100;
    private static final ResourceKey<Item> ADRENALINE_KEY = ResourceKey.create(
       Registries.ITEM, Identifier.fromNamespaceAndPath("combatinjuries", "adrenaline_shot")
    );
@@ -138,24 +140,19 @@ public final class CombatInjuries implements ModInitializer {
    public static final SoundEvent ADRENALINE_POWER_UP = registerSound("adrenaline_powerup");
    public static final SoundEvent ADRENALINE_POWER_DOWN = registerSound("adrenaline_powerdown");
    public static final SoundEvent ADRENALINE_POWER_DOWN_GRAND = registerSound("adrenaline_powerdown_grand");
+   public static final SoundEvent ADRENALINE_VEINS = registerSound("adrenaline_veins");
+   public static final SoundEvent BOLT_BEEP = registerSound("bolt_beep");
+   public static final SoundEvent BOLT_BURST_WEAK = registerSound("bolt_burst_weak");
+   public static final SoundEvent BOLT_BURST_STRONG = registerSound("bolt_burst_strong");
    public static final SoundEvent ADRENALINE_HEARTBEAT = registerSound("adrenaline_heartbeat");
    private static final Map<UUID, CombatInjuries.InjuryState> STATES = new HashMap<>();
 
    public void onInitialize() {
+      AdrenalineBolts.init();
       CreativeModeTabEvents.modifyOutputEvent(ResourceKey.create(Registries.CREATIVE_MODE_TAB, Identifier.withDefaultNamespace("tools_and_utilities")))
          .register((ModifyOutput)var0 -> {
             var0.accept(ADRENALINE_SHOT);
             var0.accept(SYRINGE);
-            var0.accept(rustyCreativeStack(Items.IRON_SWORD, "item.combatinjuries.rusty_iron_sword"));
-            var0.accept(rustyCreativeStack(Items.IRON_AXE, "item.combatinjuries.rusty_iron_axe"));
-            var0.accept(rustyCreativeStack(Items.IRON_PICKAXE, "item.combatinjuries.rusty_iron_pickaxe"));
-            var0.accept(rustyCreativeStack(Items.IRON_SHOVEL, "item.combatinjuries.rusty_iron_shovel"));
-            var0.accept(rustyCreativeStack(Items.IRON_HOE, "item.combatinjuries.rusty_iron_hoe"));
-            var0.accept(rustyCreativeStack(Items.COPPER_SWORD, "item.combatinjuries.rusty_copper_sword"));
-            var0.accept(rustyCreativeStack(Items.COPPER_AXE, "item.combatinjuries.rusty_copper_axe"));
-            var0.accept(rustyCreativeStack(Items.COPPER_PICKAXE, "item.combatinjuries.rusty_copper_pickaxe"));
-            var0.accept(rustyCreativeStack(Items.COPPER_SHOVEL, "item.combatinjuries.rusty_copper_shovel"));
-            var0.accept(rustyCreativeStack(Items.COPPER_HOE, "item.combatinjuries.rusty_copper_hoe"));
          });
       LootTableEvents.MODIFY
          .register(
@@ -173,6 +170,16 @@ public final class CombatInjuries implements ModInitializer {
       AttackEntityCallback.EVENT.register(CombatInjuries::onAttack);
       UseItemCallback.EVENT.register(CombatInjuries::onUseItem);
       ServerLivingEntityEvents.AFTER_DAMAGE.register(CombatInjuries::afterDamage);
+      ServerLivingEntityEvents.AFTER_DEATH.register((dead, source) -> {
+         if (dead instanceof ServerPlayer deadPlayer) {
+            state(deadPlayer).seenMask = 0;
+         } else if (source != null && source.getEntity() instanceof ServerPlayer killer) {
+            CombatInjuries.InjuryState ks = state(killer);
+            if (ks.adrenalineRushTicks > 0 && ks.rushShots >= 3) {
+               grant(killer, "no_touching");
+            }
+         }
+      });
       CommandRegistrationCallback.EVENT
          .register(
             (CommandRegistrationCallback)(var0, var1, var2) -> var0.register(
@@ -200,6 +207,7 @@ public final class CombatInjuries implements ModInitializer {
                                     .then(Commands.literal("adrenaline_stun").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "adrenaline_stun")))
                                     .then(Commands.literal("overdose").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "overdose")))
                                     .then(Commands.literal("qte").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "qte")))
+                                    .then(Commands.literal("fake_qte").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "fake_qte")))
                                     .then(Commands.literal("asphyxia").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "asphyxia"))))
                                  .then(Commands.literal("winded").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "winded"))))
                               .then(Commands.literal("hysteria").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "hysteria"))))
@@ -209,6 +217,7 @@ public final class CombatInjuries implements ModInitializer {
                   .then(Commands.literal("clear").executes(var0x -> runInjuryTest((CommandSourceStack)var0x.getSource(), "clear")))
             )
          );
+      ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> STATES.remove(handler.getPlayer().getUUID()));
       EntitySleepEvents.START_SLEEPING.register((StartSleeping)(var0, var1) -> {
          if (var0 instanceof ServerPlayer var2) {
             CombatInjuries.InjuryState startState = state(var2);
@@ -231,6 +240,10 @@ public final class CombatInjuries implements ModInitializer {
             var3.sleepTicks = 0;
             if (!sleptThrough) {
                return;
+            }
+
+            if (var3.hemorrhage) {
+               grant(var2, "sleep_cure");
             }
 
             var3.hemorrhage = false;
@@ -330,11 +343,16 @@ public final class CombatInjuries implements ModInitializer {
             var3.stunTicks = AdrenalineRules.CASHOUT_STUN_TICKS;
             break;
          case "overdose":
-            overdose(var2, var3);
+            overdose(var2, var3, Math.max(1, var3.rushShots), false);
+            break;
+         case "fake_qte":
+            var3.rushShots = Math.max(3, var3.rushShots);
+            var3.adrenalineRushTicks = AdrenalineRules.segmentTicks(var3.rushShots) - (AdrenalineRules.fakeStart1(var3.rushShots) + 3);
+            var3.adrenalineCrashTicks = 0;
             break;
          case "qte":
             if (var3.adrenalineRushTicks > 0) {
-               var3.adrenalineRushTicks = AdrenalineRules.WINDOW_TICKS + AdrenalineRules.LATENCY_GRACE_TICKS + 20;
+               var3.adrenalineRushTicks = AdrenalineRules.windowTicks(Math.max(1, var3.rushShots)) + AdrenalineRules.LATENCY_GRACE_TICKS + 20;
             }
             break;
          case "concussion_light":
@@ -439,6 +457,8 @@ public final class CombatInjuries implements ModInitializer {
 
          if (var4.getItem() != ADRENALINE_SHOT) {
             return InteractionResult.PASS;
+         } else if (CombatInjuriesApi.BEFORE_SHOT.invoker().handle(var3, var4) || CombatInjuriesApi.SHOT_BEFORE_USE.invoker().handle(var3)) {
+            return InteractionResult.SUCCESS;
          } else if (var5.stunTicks > 0 || var5.shotLockoutTicks > 0 || var3.getCooldowns().isOnCooldown(var4)) {
             return InteractionResult.FAIL;
          } else {
@@ -446,12 +466,14 @@ public final class CombatInjuries implements ModInitializer {
             if (shots == 0) {
                ItemStack cdStack = var4.copy();
                var4.consume(1, var3);
-               var3.getCooldowns().addCooldown(cdStack, AdrenalineRules.COOLDOWN_TICKS);
+               var3.getCooldowns().addCooldown(cdStack, AdrenalineRules.cooldownTicks(1));
                var1.playSound((Player)null, var3.getX(), var3.getY(), var3.getZ(), ADRENALINE_INJECT, SoundSource.PLAYERS, 1.0F, 1.0F);
                var5.rushShots = 1;
                var5.adrenalineRushTicks = AdrenalineRules.FIRST_SEGMENT_TICKS;
                var5.adrenalineCrashTicks = 0;
                var5.storedAdrenalineDamage = 0.0F;
+               grant(var3, "first_dose");
+               CombatInjuriesApi.RUSH_STARTED.invoker().on(var3);
                return InteractionResult.SUCCESS;
             }
 
@@ -462,16 +484,19 @@ public final class CombatInjuries implements ModInitializer {
 
             ItemStack cdStack2 = var4.copy();
             var4.consume(1, var3);
-            var3.getCooldowns().addCooldown(cdStack2, AdrenalineRules.COOLDOWN_TICKS);
+            var3.getCooldowns().addCooldown(cdStack2, AdrenalineRules.cooldownTicks(Math.min(AdrenalineRules.MAX_SHOTS, shots + 1)));
             var1.playSound((Player)null, var3.getX(), var3.getY(), var3.getZ(), ADRENALINE_INJECT, SoundSource.PLAYERS, 1.0F, 1.0F + 0.12F * shots);
+            boolean fakePress = zone == Zone.DANGER && AdrenalineRules.fakeActive(shots, var5.adrenalineRushTicks);
             if (shots >= AdrenalineRules.MAX_SHOTS) {
-               overdose(var3, var5);
+               overdose(var3, var5, shots, fakePress);
             } else if (zone == Zone.WINDOW) {
                var5.rushShots = shots + 1;
-               var5.adrenalineRushTicks = AdrenalineRules.EXTENSION_SEGMENT_TICKS;
+               var5.adrenalineRushTicks = AdrenalineRules.segmentTicks(var5.rushShots);
+               grant(var3, var5.rushShots == 2 ? "chain_2" : (var5.rushShots == 3 ? "chain_3" : "chain_4"));
             } else if (shots >= AdrenalineRules.LETHAL_EARLY_STACK) {
-               overdose(var3, var5);
+               overdose(var3, var5, shots, fakePress);
             } else {
+               grant(var3, "jumpy");
                var5.stunTicks = AdrenalineRules.SHOCK_STUN_TICKS;
                endRush(var3, var5, false);
             }
@@ -486,13 +511,16 @@ public final class CombatInjuries implements ModInitializer {
       int shots = Math.max(1, Math.min(AdrenalineRules.MAX_SHOTS, var1.rushShots));
       var1.adrenalineRushTicks = 0;
       var1.rushShots = 0;
+      CombatInjuriesApi.RUSH_ENDED.invoker().on(var0, cashOut);
       if (cashOut) {
+         grant(var0, "quit_ahead");
          var1.storedAdrenalineDamage = 0.0F;
          var1.stunTicks = AdrenalineRules.CASHOUT_STUN_TICKS;
          return;
       }
 
       var1.adrenalineCrashTicks = 300;
+      var1.crashFromShots = shots;
       if (var1.storedAdrenalineDamage > 0.0F) {
          ServerLevel var13 = var0.level();
          float bill = var1.storedAdrenalineDamage * AdrenalineRules.CRASH_MULT[shots];
@@ -502,7 +530,17 @@ public final class CombatInjuries implements ModInitializer {
    }
 
    /** Lethal damage that ignores armor, effects and enchantments. A Totem of Undying still saves you, at a heavy price. Creative players keep the penalty but not the death. */
-   private static void overdose(ServerPlayer var0, CombatInjuries.InjuryState var1) {
+   private static void overdose(ServerPlayer var0, CombatInjuries.InjuryState var1, int shotsBefore, boolean fake) {
+      grant(var0, "overdose");
+      CombatInjuriesApi.OVERDOSED.invoker().on(var0);
+      if (shotsBefore < AdrenalineRules.MAX_SHOTS) {
+         grant(var0, "overdose_early");
+      }
+
+      if (fake) {
+         grant(var0, "fake_qte");
+      }
+
       var1.adrenalineRushTicks = 0;
       var1.adrenalineCrashTicks = 0;
       var1.rushShots = 0;
@@ -513,6 +551,10 @@ public final class CombatInjuries implements ModInitializer {
       }
 
       if (var0.isAlive()) {
+         if (!var0.isCreative() && !var0.isSpectator()) {
+            grant(var0, "take_two");
+         }
+
          var1.stunTicks = AdrenalineRules.TOTEM_STUN_TICKS;
          var1.shotLockoutTicks = AdrenalineRules.OVERDOSE_LOCKOUT_TICKS;
       }
@@ -628,6 +670,7 @@ public final class CombatInjuries implements ModInitializer {
    private static void tickPlayer(ServerPlayer var0) {
       CombatInjuries.InjuryState var1 = state(var0);
       var1.ticks++;
+      checkInjuryAchievements(var0, var1);
       if (var1.lastBerryDamageTick >= 0 && var1.ticks - var1.lastBerryDamageTick > 25) {
          var1.berryDamageTicks = 0;
          var1.lastBerryDamageTick = -1;
@@ -670,6 +713,10 @@ public final class CombatInjuries implements ModInitializer {
       float var10 = var0.getHealth();
       float healthGained = var10 - var1.previousHealth;
       if (healthGained >= HEMORRHAGE_CURE_HEAL) {
+         if (var1.hemorrhage) {
+            grant(var0, "stop_bleeding");
+         }
+
          var1.hemorrhage = false;
       } else if (healthGained > 0.0F && var1.hemorrhage && BLEEDING_BLOCKS_REGEN && !var0.hasEffect(MobEffects.REGENERATION)) {
          var0.setHealth(var1.previousHealth);
@@ -781,7 +828,7 @@ public final class CombatInjuries implements ModInitializer {
          }
       }
 
-      if (var1.hemorrhage) {
+      if (var1.hemorrhage && !var0.isSleeping()) {
          var1.bleedTicks++;
          int var6 = !var0.isSprinting() && !(var0.getDeltaMovement().horizontalDistance() > 0.01) ? 20 : 10;
          if (var1.bleedTicks >= var6) {
@@ -846,6 +893,12 @@ public final class CombatInjuries implements ModInitializer {
       } else if (var1.adrenalineCrashTicks > 0) {
          var1.adrenalineCrashTicks--;
          var0.causeFoodExhaustion(0.04F);
+         if (var1.adrenalineCrashTicks == 0 && var0.isAlive()) {
+            grant(var0, "comedown");
+            if (var1.crashFromShots >= 3) {
+               grant(var0, "paid_in_full");
+            }
+         }
       }
 
       float var14 = var0.getYRot();
@@ -853,7 +906,7 @@ public final class CombatInjuries implements ModInitializer {
       boolean var17 = var1.hasRotationSnapshot && (var14 != var1.lastStillYaw || var16 != var1.lastStillPitch);
       if (var1.fracture && var0.onGround() && !var0.isSprinting() && var0.getDeltaMovement().horizontalDistance() < 0.001 && !var17) {
          var1.stillTicks++;
-         if (var1.stillTicks >= 200) {
+         if (var1.stillTicks >= FRACTURE_STILL_TICKS) {
             var1.fracture = false;
             var1.stillTicks = 0;
          }
@@ -908,6 +961,92 @@ public final class CombatInjuries implements ModInitializer {
    public static final int CONCUSSION_LIGHT_TICKS = 120;
    public static final int CONCUSSION_HEAVY_TICKS = 300;
 
+   /** Gives a mod advancement (data/combatinjuries/advancement/<id>.json). Safe to call repeatedly: vanilla ignores an advancement already earned. */
+   private static void grant(ServerPlayer player, String id) {
+      try {
+         var holder = player.level().getServer().getAdvancements().get(Identifier.fromNamespaceAndPath("combatinjuries", id));
+         if (holder != null) {
+            player.getAdvancements().award(holder, "done");
+         }
+      } catch (RuntimeException ignored) {
+      }
+   }
+
+   /** Called every tick: awards the injury achievements the first time each status is seen, and "all injuries" once all seven were seen in one life. */
+   private static void checkInjuryAchievements(ServerPlayer var0, CombatInjuries.InjuryState var1) {
+      int seen = var1.seenMask;
+      if (var1.hemorrhage) {
+         seen |= 1;
+      }
+      if (var1.tetanus) {
+         seen |= 2;
+      }
+      if (var1.concussionTicks > 0) {
+         seen |= 4;
+      }
+      if (var1.fracture) {
+         seen |= 8;
+      }
+      if (var1.winded) {
+         seen |= 16;
+      }
+      if (var1.asphyxia) {
+         seen |= 32;
+      }
+      if (var1.hysteria) {
+         seen |= 64;
+      }
+
+      if (var1.concussionTicks > 0 && var1.concussionHeavy) {
+         grant(var0, "heavy_concussion");
+      }
+
+      if (var1.asphyxia && var1.asphyxiaFromBurial) {
+         grant(var0, "dug_grave");
+      }
+
+      int activeCount = (var1.hemorrhage ? 1 : 0) + (var1.tetanus ? 1 : 0) + (var1.concussionTicks > 0 ? 1 : 0) + (var1.fracture ? 1 : 0)
+         + (var1.winded ? 1 : 0) + (var1.asphyxia ? 1 : 0) + (var1.hysteria ? 1 : 0);
+      if (activeCount >= 3) {
+         grant(var0, "walking_disaster");
+      }
+
+      if (var1.hysteriaPrev && !var1.hysteria) {
+         grant(var0, "back_to_reality");
+      }
+
+      var1.hysteriaPrev = var1.hysteria;
+      if (seen != var1.seenMask) {
+         int added = seen & ~var1.seenMask;
+         var1.seenMask = seen;
+         String[] ids = {"hemorrhage", "tetanus", "concussion", "fracture", "winded", "asphyxia", "hysteria"};
+         for (int i = 0; i < ids.length; i++) {
+            if ((added & (1 << i)) != 0) {
+               grant(var0, ids[i]);
+            }
+         }
+
+         if (seen == 127) {
+            grant(var0, "all_injuries");
+         }
+      }
+
+      if (++var1.shotCheckTicks >= 40) {
+         var1.shotCheckTicks = 0;
+         if (var0.getInventory().contains(stack -> stack.is(ADRENALINE_SHOT))) {
+            grant(var0, "obtain_shot");
+         }
+
+         if (var0.getInventory().contains(stack -> stack.is(SYRINGE))) {
+            grant(var0, "needle_work");
+         }
+
+         if (var0.getInventory().contains(stack -> stack.is(ADRENALINE_SHOT) && stack.getCount() >= 16)) {
+            grant(var0, "bulk_order");
+         }
+      }
+   }
+
    private static void applyConcussion(CombatInjuries.InjuryState var0, boolean heavy) {
       if (heavy) {
          var0.concussionTicks = CONCUSSION_HEAVY_TICKS;
@@ -960,7 +1099,7 @@ public final class CombatInjuries implements ModInitializer {
 
    private static boolean isRustySource(LivingEntity attacker) {
       ItemStack held = attacker.getMainHandItem();
-      if (hasRustyMarker(held) || isCopperTool(held)) {
+      if (hasRustyMarker(held) || isWornMetalTool(held)) {
          return true;
       }
 
@@ -970,6 +1109,24 @@ public final class CombatInjuries implements ModInitializer {
       }
 
       return false;
+   }
+
+   private static final float RUST_DAMAGE_FRACTION = 0.6F;
+
+   private static boolean isWornMetalTool(ItemStack stack) {
+      if (!stack.isDamageableItem()) {
+         return false;
+      }
+
+      Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+      if (id == null) {
+         return false;
+      }
+
+      String path = id.getPath();
+      boolean metal = path.startsWith("iron_") || path.startsWith("copper_");
+      boolean tool = path.endsWith("_sword") || path.endsWith("_axe") || path.endsWith("_pickaxe") || path.endsWith("_shovel") || path.endsWith("_hoe") || path.endsWith("_spear");
+      return metal && tool && stack.getDamageValue() >= stack.getMaxDamage() * RUST_DAMAGE_FRACTION;
    }
 
    private static boolean isCopperTool(ItemStack var0) {
@@ -997,9 +1154,36 @@ public final class CombatInjuries implements ModInitializer {
 
    public static void cureTetanus(ServerPlayer var0) {
       CombatInjuries.InjuryState var1 = state(var0);
+      if (var1.tetanus) {
+         grant(var0, "got_milk");
+      }
+
       var1.tetanus = false;
       var1.tetanusCooldown = 0;
       var1.tetanusDropOffHand = false;
+   }
+
+   public static boolean hasInjury(Player player, String id) {
+      CombatInjuries.InjuryState st = STATES.get(player.getUUID());
+      if (st == null) {
+         return false;
+      }
+
+      return switch (id) {
+         case "hemorrhage" -> st.hemorrhage;
+         case "tetanus" -> st.tetanus;
+         case "concussion" -> st.concussionTicks > 0;
+         case "fracture" -> st.fracture;
+         case "winded" -> st.winded;
+         case "asphyxia" -> st.asphyxia;
+         case "hysteria" -> st.hysteria;
+         default -> false;
+      };
+   }
+
+   public static int rushShotsOf(Player player) {
+      CombatInjuries.InjuryState st = STATES.get(player.getUUID());
+      return st != null && st.adrenalineRushTicks > 0 ? st.rushShots : 0;
    }
 
    public static boolean isStunned(Player var0) {
@@ -1026,6 +1210,10 @@ public final class CombatInjuries implements ModInitializer {
       private int concussionTicks;
       private boolean concussionHeavy;
       private int rushShots;
+      private int seenMask;
+      private int crashFromShots;
+      private boolean hysteriaPrev;
+      private int shotCheckTicks;
       private int stunTicks;
       private int shotLockoutTicks;
       private int asphyxiaDamageTicks;
