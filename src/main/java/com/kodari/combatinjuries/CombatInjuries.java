@@ -457,6 +457,8 @@ public final class CombatInjuries implements ModInitializer {
 
          if (var4.getItem() != ADRENALINE_SHOT) {
             return InteractionResult.PASS;
+         } else if (CombatInjuriesApi.BEFORE_SHOT.invoker().handle(var3, var4)) {
+            return InteractionResult.SUCCESS;
          } else if (var5.stunTicks > 0 || var5.shotLockoutTicks > 0 || var3.getCooldowns().isOnCooldown(var4)) {
             return InteractionResult.FAIL;
          } else {
