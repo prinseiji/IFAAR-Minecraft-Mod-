@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "N": "minecraft:iron_nugget",
+    "I": "minecraft:iron_ingot",
+    "C": "minecraft:charcoal"
+  },
+  "pattern": [
+    "NIN",
+    "CCC",
+    "NIN"
+  ],
+  "result": {
+    "id": "breathless:gas_mask_filter"
+  }
+}

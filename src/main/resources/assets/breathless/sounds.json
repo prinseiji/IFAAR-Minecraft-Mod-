@@ -1,0 +1,164 @@
+{
+  "wheeze": {
+    "sounds": [
+      {
+        "name": "breathless:wheeze",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.wheeze"
+  },
+  "mask_on": {
+    "sounds": [
+      {
+        "name": "breathless:mask_on",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.mask_on"
+  },
+  "filter_on": {
+    "sounds": [
+      {
+        "name": "breathless:filter_on",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.filter_on"
+  },
+  "filter_off": {
+    "sounds": [
+      {
+        "name": "breathless:filter_off",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.filter_off"
+  },
+  "filter_runout": {
+    "sounds": [
+      {
+        "name": "breathless:filter_runout",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.filter_runout"
+  },
+  "crack_50": {
+    "sounds": [
+      {
+        "name": "breathless:crack_50",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.crack"
+  },
+  "crack_25": {
+    "sounds": [
+      {
+        "name": "breathless:crack_25",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.crack"
+  },
+  "tendrils": {
+    "sounds": [
+      {
+        "name": "breathless:tendrils",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.tendrils"
+  },
+  "spore_damage": {
+    "sounds": [
+      {
+        "name": "breathless:spore_damage",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.spore_damage"
+  },
+  "sigh_relief": {
+    "sounds": [
+      {
+        "name": "breathless:sigh_relief",
+        "stream": false
+      }
+    ],
+    "subtitle": "subtitles.breathless.sigh_relief"
+  },
+  "popup_spam": {
+    "sounds": [
+      {
+        "name": "breathless:popup_spam",
+        "stream": false
+      }
+    ]
+  },
+  "popup_final": {
+    "sounds": [
+      {
+        "name": "breathless:popup_final",
+        "stream": false
+      }
+    ]
+  },
+  "ambience_muffled": {
+    "sounds": [
+      {
+        "name": "breathless:amb_muffled_0",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_muffled_1",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_muffled_2",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_muffled_3",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_muffled_4",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_muffled_5",
+        "stream": true
+      }
+    ]
+  },
+  "ambience_open": {
+    "sounds": [
+      {
+        "name": "breathless:amb_open_0",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_open_1",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_open_2",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_open_3",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_open_4",
+        "stream": true
+      },
+      {
+        "name": "breathless:amb_open_5",
+        "stream": true
+      }
+    ]
+  }
+}

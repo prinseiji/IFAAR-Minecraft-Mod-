@@ -1,0 +1,21 @@
+{
+  "item.breathless.gas_mask": "Gas Mask",
+  "item.breathless.gas_mask_empty": "Gas Mask",
+  "item.breathless.gas_mask_filter": "Gas Mask Filter",
+  "breathless.tooltip.filters": "Filters: %s/%s",
+  "breathless.tooltip.filter_slot": "Filter %s: %s%%",
+  "breathless.tooltip.filter_empty": "Filter %s: empty",
+  "breathless.tooltip.filter_life": "Filter life: %s%%",
+  "breathless.tooltip.insert_hint": "Click a filter onto the mask to insert it",
+  "breathless.tooltip.remove_hint": "Right-click the mask to take a filter out",
+  "subtitles.breathless.wheeze": "Heavy wheezing",
+  "subtitles.breathless.mask_on": "Gas mask equipped",
+  "subtitles.breathless.filter_on": "Filter inserted",
+  "subtitles.breathless.filter_off": "Filter removed",
+  "subtitles.breathless.filter_runout": "Filter runs out",
+  "subtitles.breathless.crack": "Visor cracks",
+  "subtitles.breathless.tendrils": "Sculk tendrils creep",
+  "subtitles.breathless.spore_damage": "Spores choke",
+  "subtitles.breathless.sigh_relief": "Sigh of relief",
+  "subtitles.breathless.exposed": "Spores in the air"
+}
